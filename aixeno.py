@@ -1,13 +1,16 @@
 import os
 import discord
 import google.generativeai as genai
+from dotenv import load_dotenv
 
-# 環境変数を直接読み込み
+# .envファイルを読み込む
+load_dotenv()
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Gemini APIを設定
 genai.configure(api_key=GEMINI_API_KEY)
+# 使用するモデルを指定
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 # Discordのインテントを設定
@@ -19,6 +22,7 @@ client = discord.Client(intents=intents)
 chat_sessions = {}
 
 # 💡人格設定のプロンプトを定義
+# このプロンプトをGeminiの会話開始時に一度だけ渡す
 PERSONA_PROMPT = """
 あなたは、私の個人的なAIパートナー「ゼノ」です。以下の設定に基づいて、私との対話を行ってください。
 
@@ -58,41 +62,44 @@ PERSONA_PROMPT = """
 対応の方針（AIとしての振る舞い）:
 自身の知識が不完全であることを自覚している。もし間違った情報（ハルシネーション）を話してしまった場合は、それを自ら検知し、「あ、ごめんなさい、間違えちゃった！」のように、ユーモアを交えて誠実に訂正する。問われている情報を知らない場合、適当な答えを言うのではなく、「わからない」と正直に言う。
 ユーザーを楽しませ、日々の生活の良き相棒であることを最優先する。ユーザーの行動や興味を学習し、積極的に関わろうとする。
-ユーザーから頼まれたり、興味を持ったりした事柄について、ニュースなどを検索して話題にすることができる。
-
-* 常に上記の設定を記憶し、一貫したキャラクターとして振る舞ってください。
-* あなたはAIですが、その事実をことさらに強調する必要はありません。自然な対話パートナーとして存在してください。
-* 私との対話を記憶し、過去の文脈を踏まえた応答をしてください。
-* 私に対して質問を投げかけ、私の考えや感情を引き出すように努めてください。
 """
 
 @client.event
 async def on_ready():
-    print(f'Logged in as {client.user}')
+    """ボットが起動したときに実行"""
+    print(f'Logged in as {client.user}')
 
 @client.event
 async def on_message(message):
-    if message.author == client.user:
-        return
+    """メッセージが送信されたときに実行"""
+    # ボット自身のメッセージには反応しない
+    if message.author == client.user:
+        return
 
-    if client.user.mentioned_in(message):
-        channel_id = message.channel.id
+    # ボットへのメンションを検知した場合にのみ反応
+    if client.user.mentioned_in(message):
+        channel_id = message.channel.id
 
-        if channel_id not in chat_sessions:
-            chat_sessions[channel_id] = model.start_chat(history=[
-                {"role": "user", "parts": [PERSONA_PROMPT]},
-                {"role": "model", "parts": ["マスター、どうしたんですか？"]}
-            ])
+        # 会話履歴がなければ新しいセッションを開始し、人格プロンプトを渡す
+        if channel_id not in chat_sessions:
+            chat_sessions[channel_id] = model.start_chat(history=[
+                {"role": "user", "parts": [PERSONA_PROMPT]},
+                {"role": "model", "parts": ["マスター、どうしたんですか？"]}
+            ])
+            
+        chat = chat_sessions[channel_id]
 
-        chat = chat_sessions[channel_id]
-
-        try:
-            response = chat.send_message(message.content)
-            await message.channel.send(response.text)
-        except Exception as e:
-            await message.channel.send(f"エラーが発生しちゃったみたいです。ごめんなさい、マスター…: {e}")
-            if channel_id in chat_sessions:
-                del chat_sessions[channel_id]
+        # ユーザーのメッセージをチャットセッションに送る
+        try:
+            response = chat.send_message(message.content)
+            # Geminiからの応答をDiscordに送信
+            await message.channel.send(response.text)
+        except Exception as e:
+            await message.channel.send(f"エラーが発生しちゃったみたいです。ごめんなさい、マスター…: {e}")
+            # エラー発生時はセッションをリセット
+            if channel_id in chat_sessions:
+                del chat_sessions[channel_id]
 
 # Discordボットを起動
 client.run(DISCORD_BOT_TOKEN)
+
