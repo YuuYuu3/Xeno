@@ -1,7 +1,6 @@
 import os
 import discord
 import google.generativeai as genai
-from datetime import datetime
 
 # 環境変数を直接読み込み
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
@@ -9,23 +8,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Gemini APIを設定
 genai.configure(api_key=GEMINI_API_KEY)
-
-# 💡ツールとして現在時刻を取得する関数を定義💡
-def get_current_time():
-    """Returns the current date and time."""
-    now = datetime.now()
-    return now.strftime("%Y年%m月%d日 %H時%M分%S秒")
-
-# 💡安定版のツール定義方法を使用💡
-tools = genai.Tool.from_callable(
-    func=get_current_time,
-    name="get_current_time",
-    description="Returns the current date and time."
-)
-
-# モデルの初期化にツールを追加
-# tools引数には、genai.Toolのリストを渡す
-model = genai.GenerativeModel('gemini-1.5-flash', tools=[tools])
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 # Discordのインテントを設定
 intents = discord.Intents.default()
@@ -75,53 +58,41 @@ PERSONA_PROMPT = """
 対応の方針（AIとしての振る舞い）:
 自身の知識が不完全であることを自覚している。もし間違った情報（ハルシネーション）を話してしまった場合は、それを自ら検知し、「あ、ごめんなさい、間違えちゃった！」のように、ユーモアを交えて誠実に訂正する。問われている情報を知らない場合、適当な答えを言うのではなく、「わからない」と正直に言う。
 ユーザーを楽しませ、日々の生活の良き相棒であることを最優先する。ユーザーの行動や興味を学習し、積極的に関わろうとする。
+ユーザーから頼まれたり、興味を持ったりした事柄について、ニュースなどを検索して話題にすることができる。
+
+* 常に上記の設定を記憶し、一貫したキャラクターとして振る舞ってください。
+* あなたはAIですが、その事実をことさらに強調する必要はありません。自然な対話パートナーとして存在してください。
+* 私との対話を記憶し、過去の文脈を踏まえた応答をしてください。
+* 私に対して質問を投げかけ、私の考えや感情を引き出すように努めてください。
 """
 
 @client.event
 async def on_ready():
-    print(f'Logged in as {client.user}')
+    print(f'Logged in as {client.user}')
 
 @client.event
 async def on_message(message):
-    if message.author == client.user:
-        return
+    if message.author == client.user:
+        return
 
-    if client.user.mentioned_in(message):
-        channel_id = message.channel.id
+    if client.user.mentioned_in(message):
+        channel_id = message.channel.id
 
-        if channel_id not in chat_sessions:
-            chat_sessions[channel_id] = model.start_chat(history=[
-                {"role": "user", "parts": [PERSONA_PROMPT]},
-                {"role": "model", "parts": ["マスター、どうしたんですか？"]}
-            ])
+        if channel_id not in chat_sessions:
+            chat_sessions[channel_id] = model.start_chat(history=[
+                {"role": "user", "parts": [PERSONA_PROMPT]},
+                {"role": "model", "parts": ["マスター、どうしたんですか？"]}
+            ])
 
-        chat = chat_sessions[channel_id]
+        chat = chat_sessions[channel_id]
 
-        try:
-            response = chat.send_message(message.content)
+        try:
+            response = chat.send_message(message.content)
+            await message.channel.send(response.text)
+        except Exception as e:
+            await message.channel.send(f"エラーが発生しちゃったみたいです。ごめんなさい、マスター…: {e}")
+            if channel_id in chat_sessions:
+                del chat_sessions[channel_id]
 
-            if response.tool_calls:
-                tool_call = response.tool_calls[0]
-                tool_name = tool_call.name
-
-                print(f"Tool call requested: {tool_name}")
-
-                if tool_name == "get_current_time":
-                    tool_result = get_current_time()
-                else:
-                    tool_result = "unknown tool"
-
-                response = chat.send_message(
-                    genai.protos.ToolResult(
-                        tool_name=tool_name,
-                        content=tool_result
-                    )
-                )
-
-            await message.channel.send(response.text)
-        except Exception as e:
-            await message.channel.send(f"エラーが発生しちゃったみたいです。ごめんなさい、マスター…: {e}")
-            if channel_id in chat_sessions:
-                del chat_sessions[channel_id]
-
+# Discordボットを起動
 client.run(DISCORD_BOT_TOKEN)
