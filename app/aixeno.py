@@ -1,20 +1,9 @@
+# 以下のコードにbot.pyを戻してください
 import os
 import discord
 import google.generativeai as genai
-from threading import Thread
-from flask import Flask
 
-# Flaskアプリを起動してウェブサーバーを構築
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "ゼノはオンラインです。"
-
-def run_flask_app():
-    app.run(host='0.0.0.0', port=os.environ.get("PORT", 8080))
-
-# 💡環境変数を直接読み込み、.envファイルは不要
+# 環境変数を直接読み込み
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -80,21 +69,16 @@ PERSONA_PROMPT = """
 
 @client.event
 async def on_ready():
-    """ボットが起動したときに実行"""
     print(f'Logged in as {client.user}')
 
 @client.event
 async def on_message(message):
-    """メッセージが送信されたときに実行"""
-    # ボット自身のメッセージには反応しない
     if message.author == client.user:
         return
 
-    # ボットへのメンションを検知した場合にのみ反応
     if client.user.mentioned_in(message):
         channel_id = message.channel.id
 
-        # 会話履歴がなければ新しいセッションを開始し、人格プロンプトを渡す
         if channel_id not in chat_sessions:
             chat_sessions[channel_id] = model.start_chat(history=[
                 {"role": "user", "parts": [PERSONA_PROMPT]},
@@ -103,20 +87,13 @@ async def on_message(message):
 
         chat = chat_sessions[channel_id]
 
-        # ユーザーのメッセージをチャットセッションに送る
         try:
             response = chat.send_message(message.content)
-            # Geminiからの応答をDiscordに送信
             await message.channel.send(response.text)
         except Exception as e:
             await message.channel.send(f"エラーが発生しちゃったみたいです。ごめんなさい、マスター…: {e}")
-            # エラー発生時はセッションをリセット
             if channel_id in chat_sessions:
                 del chat_sessions[channel_id]
-
-# Flaskサーバーを別スレッドで起動
-server_thread = Thread(target=run_flask_app)
-server_thread.start()
 
 # Discordボットを起動
 client.run(DISCORD_BOT_TOKEN)
