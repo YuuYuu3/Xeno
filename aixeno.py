@@ -16,13 +16,16 @@ def get_current_time():
     now = datetime.now()
     return now.strftime("%Y年%m月%d日 %H時%M分%S秒")
 
-# 💡ツールをモデルに登録💡
-tools = [
-    genai.GenerativeModel.from_function(function=get_current_time),
-]
+# 💡新しい方法でツールをモデルに登録💡
+tools = genai.Tool.from_callable(
+    func=get_current_time,
+    name="get_current_time",
+    description="Returns the current date and time."
+)
 
 # モデルの初期化にツールを追加
-model = genai.GenerativeModel('gemini-1.5-flash', tools=tools)
+# tools引数には、genai.Toolのリストを渡す
+model = genai.GenerativeModel('gemini-1.5-flash', tools=[tools])
 
 # Discordのインテントを設定
 intents = discord.Intents.default()
@@ -97,7 +100,6 @@ async def on_message(message):
         try:
             response = chat.send_message(message.content)
 
-            # 💡ツール呼び出しに対応した応答処理💡
             if response.tool_calls:
                 tool_call = response.tool_calls[0]
                 tool_name = tool_call.name
@@ -109,7 +111,6 @@ async def on_message(message):
                 else:
                     tool_result = "unknown tool"
                 
-                # ツールの結果をモデルに再度送信
                 response = chat.send_message(
                     genai.protos.ToolResult(
                         tool_name=tool_name,
@@ -117,12 +118,10 @@ async def on_message(message):
                     )
                 )
 
-            # 最終的な応答を送信
             await message.channel.send(response.text)
         except Exception as e:
             await message.channel.send(f"エラーが発生しちゃったみたいです。ごめんなさい、マスター…: {e}")
             if channel_id in chat_sessions:
                 del chat_sessions[channel_id]
 
-# Discordボットを起動
 client.run(DISCORD_BOT_TOKEN)
