@@ -16,13 +16,16 @@ def get_current_time():
     now = datetime.now()
     return now.strftime("%Y年%m月%d日 %H時%M分%S秒")
 
-# 💡最初の方法でツールをモデルに登録💡
-tools = [
-    genai.GenerativeModel.from_function(function=get_current_time),
-]
+# 💡安定版のツール定義方法を使用💡
+tools = genai.Tool.from_callable(
+    func=get_current_time,
+    name="get_current_time",
+    description="Returns the current date and time."
+)
 
 # モデルの初期化にツールを追加
-model = genai.GenerativeModel('gemini-1.5-flash', tools=tools)
+# tools引数には、genai.Toolのリストを渡す
+model = genai.GenerativeModel('gemini-1.5-flash', tools=[tools])
 
 # Discordのインテントを設定
 intents = discord.Intents.default()
