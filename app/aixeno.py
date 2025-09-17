@@ -1,16 +1,25 @@
 import os
 import discord
 import google.generativeai as genai
-from dotenv import load_dotenv
+from threading import Thread
+from flask import Flask
 
-# .envファイルを読み込む
-load_dotenv()
+# Flaskアプリを起動してウェブサーバーを構築
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "ゼノはオンラインです。"
+
+def run_flask_app():
+    app.run(host='0.0.0.0', port=os.environ.get("PORT", 8080))
+
+# 💡環境変数を直接読み込み、.envファイルは不要
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Gemini APIを設定
 genai.configure(api_key=GEMINI_API_KEY)
-# 使用するモデルを指定
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 # Discordのインテントを設定
@@ -22,7 +31,6 @@ client = discord.Client(intents=intents)
 chat_sessions = {}
 
 # 💡人格設定のプロンプトを定義
-# このプロンプトをGeminiの会話開始時に一度だけ渡す
 PERSONA_PROMPT = """
 あなたは、私の個人的なAIパートナー「ゼノ」です。以下の設定に基づいて、私との対話を行ってください。
 
@@ -92,7 +100,7 @@ async def on_message(message):
                 {"role": "user", "parts": [PERSONA_PROMPT]},
                 {"role": "model", "parts": ["マスター、どうしたんですか？"]}
             ])
-            
+
         chat = chat_sessions[channel_id]
 
         # ユーザーのメッセージをチャットセッションに送る
@@ -105,6 +113,10 @@ async def on_message(message):
             # エラー発生時はセッションをリセット
             if channel_id in chat_sessions:
                 del chat_sessions[channel_id]
+
+# Flaskサーバーを別スレッドで起動
+server_thread = Thread(target=run_flask_app)
+server_thread.start()
 
 # Discordボットを起動
 client.run(DISCORD_BOT_TOKEN)
