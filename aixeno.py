@@ -12,21 +12,13 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 # 💡ツールとして現在時刻を取得する関数を定義💡
 def get_current_time():
-    """現在の時刻と日付を返します。"""
+    """Returns the current date and time."""
     now = datetime.now()
     return now.strftime("%Y年%m月%d日 %H時%M分%S秒")
 
-# 💡新しい方法でツールをモデルに登録💡
-# 最新のバージョンでは、genai.protos.FunctionDeclarationを使用します。
+# 💡最初の方法でツールをモデルに登録💡
 tools = [
-    genai.protos.FunctionDeclaration(
-        name="get_current_time",
-        description="Returns the current date and time.",
-        parameters=genai.protos.FunctionDeclaration.Schema(
-            type=genai.protos.Type.OBJECT,
-            properties={},
-        )
-    ),
+    genai.GenerativeModel.from_function(function=get_current_time),
 ]
 
 # モデルの初期化にツールを追加
@@ -105,19 +97,17 @@ async def on_message(message):
         try:
             response = chat.send_message(message.content)
 
-            # 💡ツール呼び出しに対応した応答処理💡
             if response.tool_calls:
                 tool_call = response.tool_calls[0]
                 tool_name = tool_call.name
-                
+
                 print(f"Tool call requested: {tool_name}")
-                
-                tool_result = None
+
                 if tool_name == "get_current_time":
                     tool_result = get_current_time()
                 else:
                     tool_result = "unknown tool"
-                
+
                 response = chat.send_message(
                     genai.protos.ToolResult(
                         tool_name=tool_name,
